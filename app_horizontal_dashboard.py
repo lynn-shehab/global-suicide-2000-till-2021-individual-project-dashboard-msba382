@@ -79,7 +79,7 @@ with col2:
             age_data,
             x=age_data.index,
             y="rate",
-            title=f"Suicide Rate by Age Group in {country} ({year})",
+            title=f"Suicide Rate by Age Group for Both Genders in {country} ({year})",
             labels={"rate": "Deaths per 100k", "index": "Age Group"},
             text_auto=".2f"
         )
