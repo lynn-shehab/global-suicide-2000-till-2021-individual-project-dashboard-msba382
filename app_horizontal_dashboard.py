@@ -117,5 +117,5 @@ with col5:
 # Pie: Region/country share (Optional Placeholder)
 with col6:
     region_data = top10.groupby("country")["crude_mortality"].mean().reset_index()
-    fig = px.pie(region_data, names="country", values="crude_mortality", title="Top 10 Country Share")
+    fig = px.pie(region_data, names="country", values="crude_mortality", title=f"Top 10 Country Share — {year}")
     st.plotly_chart(fig, use_container_width=True)
