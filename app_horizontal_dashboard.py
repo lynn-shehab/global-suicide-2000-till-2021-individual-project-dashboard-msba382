@@ -64,8 +64,9 @@ with col2:
     if age_cols and not latest.empty:
         age_data = latest[age_cols].T.dropna()
         age_data.columns = ["rate"]
-        age_data = age_data.sort_values("rate")
-        age_data.index.name = "Age Group" # set index name for x-axis label
+        age_data.index = age_data.index.str.extract(r'aged_(\\d+_\\d+|\\d+\\+)_year_olds')[0]
+        age_data.index = age_data.index.str.replace("_", "–")
+        age_data.index.name = "Age Group"
 
         fig = px.bar(
             age_data,
