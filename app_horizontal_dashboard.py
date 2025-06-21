@@ -64,19 +64,35 @@ with col2:
     if age_cols and not latest.empty:
         age_data = latest[age_cols].T.dropna()
         age_data.columns = ["rate"]
-        age_data.index = age_data.index.str.extract(r'aged_(\\d+_\\d+|\\d+\\+)_year_olds')[0]
-        age_data.index = age_data.index.str.replace("_", "–")
-        age_data.index.name = "Age Group"
 
-        fig = px.bar(
-            age_data,
-            x=age_data.index,
-            y="rate",
-            title=f"Suicide Rate by Age Group in {country} ({year})",
-            labels={"rate": "Deaths per 100k", "index": "Age Group"},
-            text_auto=".2f"
-        )
-        st.plotly_chart(fig, use_container_width=True)
+# Extract age groups from column names
+import re
+age_labels = []
+for col in age_data.index:
+    match = re.search(r"aged_(\d{2})_(\d{2})", col)
+    if match:
+        age_labels.append(f"{match.group(1)}–{match.group(2)}")
+    else:
+        match_plus = re.search(r"aged_(\d{2})\+", col)
+        if match_plus:
+            age_labels.append(f"{match_plus.group(1)}+")
+        else:
+            age_labels.append(col) # fallback
+
+# Set those as index
+age_data.index = age_labels
+age_data.index.name = "Age Group"
+
+# Step 2: Plot
+fig = px.bar(
+    age_data,
+    x=age_data.index,
+    y="rate",
+    title=f"Suicide Rate by Age Group in {country} ({year})",
+    labels={"rate": "Deaths per 100k", "index": "Age Group"},
+    text_auto=".2f"
+)
+st.plotly_chart(fig, use_container_width=True)
 
 # Gender trend
 with col3:
