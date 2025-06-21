@@ -59,7 +59,7 @@ with col1:
     st.plotly_chart(fig, use_container_width=True)
 
 # Bar chart: age distribution
-with col 2:
+with col2:
     age_cols = [c for c in df.columns if "aged_" in c and "both_sexes" in c]
     if age_cols and not latest.empty:
         age_data = latest[age_cols].T.dropna()
