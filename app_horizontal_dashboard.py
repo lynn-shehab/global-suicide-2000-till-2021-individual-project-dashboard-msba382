@@ -65,8 +65,6 @@ with col2:
         age_data = latest[age_cols].T.dropna()
         age_data.columns = ["rate"]
         age_data = age_data.sort_values("rate")
-
-# ✅ Clean up column names for X-axis
         age_labels = []
         for col in age_data.index:
             if "aged_" in col and "_year_olds" in col:
@@ -75,11 +73,8 @@ with col2:
                 age_labels.append(label)
             else:
                 age_labels.append(col) # fallback in case of format mismatch
-
         age_data.index = age_labels
         age_data.index.name = "Age Group"
-
-# Plot using Plotly
         fig = px.bar(
             age_data,
             x=age_data.index,
