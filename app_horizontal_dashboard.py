@@ -205,25 +205,14 @@ with col2:
 
 
 with col3:
-    if "male_suicide_rate_age_standardized" in country_trend_df.columns and "female_suicide_rate_age_standardized" in country_trend_df.columns and not country_trend_df.empty:
-        # Create a melted DataFrame for Plotly Express
-        gender_rates_df = country_trend_df[['year', 'male_suicide_rate_age_standardized', 'female_suicide_rate_age_standardized']].melt(
-            id_vars=['year'], var_name='Sex', value_name='Rate'
-        ).dropna(subset=['Rate'])
+    if "male_to_female_suicide_death_rate_ratio_age_standardized" in country_df.columns:
+        fig = px.line(country_df.dropna(subset=["male_to_female_suicide_death_rate_ratio_age_standardized"]),
+                      x="year", y="male_to_female_suicide_death_rate_ratio_age_standardized",
+                      title=f"M:F Suicide Ratio — {country}", markers=True,
+                      color_discrete_sequence=["#ff7f0e"])
+        fig.update_layout(template="plotly_white")
+        st.plotly_chart(fig, use_container_width=True)
 
-        if not gender_rates_df.empty:
-            fig = px.line(
-                gender_rates_df,
-                x="year", y="Rate", color="Sex",
-                title=f"Male vs. Female Suicide Rates Over Time — {selected_country}", markers=True,
-                color_discrete_map={
-                    "male_suicide_rate_age_standardized": BLUE_COLOR_SCALE[-1][1], # Darker blue for male
-                    "female_suicide_rate_age_standardized": BLUE_COLOR_SCALE[1][1] # Lighter blue for female
-                }
-            )
-            fig.update_layout(template="plotly_dark")
-            st.plotly_chart(fig, use_container_width=True)
-            st.caption("Age-standardized death rates from self-inflicted injuries.")
 
 st.markdown("---")
 
