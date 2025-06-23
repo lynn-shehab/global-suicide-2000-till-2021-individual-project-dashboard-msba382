@@ -13,7 +13,6 @@ min_mortality = df['crude_mortality'].min()
 max_mortality = df['crude_mortality'].max()
 
 # Define a blue color scale (lighter for lower rates, darker for higher rates)
-# These are Hex codes for various shades of blue. You can adjust these.
 BLUE_COLOR_SCALE = [
     [0.0, "#E0F2F7"],  # Very Light Blue
     [0.2, "#B3E0F2"],
@@ -80,10 +79,8 @@ current_crude_mortality = latest['crude_mortality'].values[0] if not latest.empt
 main_line_color = get_dynamic_color(current_crude_mortality, min_mortality, max_mortality, BLUE_COLOR_SCALE)
 
 # Default title font color for dark theme (common for Streamlit dashboards unless explicitly changed)
-# You might need to adjust this if your default theme is light or a different specific dark color.
 DEFAULT_TITLE_COLOR = "white" # Or "#FFFFFF" or "rgba(255, 255, 255, 0.8)" for a slightly softer white.
 
-# === TOP METRICS ===
 # === TOP METRICS ===
 st.markdown("### \U0001F522 Key Indicators")
 col1, col2, col3 = st.columns(3) # Added more columns for new metrics
@@ -155,9 +152,6 @@ with col2:
     if age_cols and not latest.empty:
         age_data = latest[age_cols].T.dropna()
         age_data.columns = ["rate"]
-        # Ensure age_data is sorted by age group if you want the bars ordered
-        # You'll need to define a custom sort order for age labels if they're not numerical
-        # For now, let's keep the existing sort by rate for visual impact.
         age_data = age_data.sort_values("rate")
 
         age_labels = []
@@ -228,8 +222,6 @@ with col5:
 
 with col6:
     region_data = top10.groupby("country")["crude_mortality"].mean().reset_index()
-    # For the pie chart, we want slices to have different shades based on their value
-    # We should calculate the min/max from the 'crude_mortality' within this specific pie chart's data
     pie_min_mortality = region_data["crude_mortality"].min()
     pie_max_mortality = region_data["crude_mortality"].max()
     pie_colors = [get_dynamic_color(val, pie_min_mortality, pie_max_mortality, BLUE_COLOR_SCALE) for val in region_data["crude_mortality"]]
