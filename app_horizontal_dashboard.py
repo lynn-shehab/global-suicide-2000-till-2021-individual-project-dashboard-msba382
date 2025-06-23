@@ -97,12 +97,29 @@ with col1:
     )
 
 with col3:
+    # Check if the column exists in the latest data
     if "male_to_female_suicide_death_rate_ratio_age_standardized" in latest.columns:
+        current_m_f_ratio = latest['male_to_female_suicide_death_rate_ratio_age_standardized'].values[0] if not latest.empty else None
+        previous_m_f_ratio = previous['male_to_female_suicide_death_rate_ratio_age_standardized'].values[0] if not previous.empty else None
+
+        m_f_ratio_delta = None
+        if current_m_f_ratio is not None and previous_m_f_ratio is not None:
+            m_f_ratio_delta = current_m_f_ratio - previous_m_f_ratio
+
         st.metric(
             "Male-to-Female Ratio",
-            f"{latest['male_to_female_suicide_death_rate_ratio_age_standardized'].values[0]:.2f}" if not latest.empty else "N/A",
+            f"{current_m_f_ratio:.2f}" if current_m_f_ratio is not None else "N/A",
+            f"{m_f_ratio_delta:+.2f}" if m_f_ratio_delta is not None else "N/A",
             help="Ratio of male to female suicide mortality - values above 1 mean male rates are higher."
         )
+    else:
+        st.metric(
+            "Male-to-Female Ratio",
+            "N/A",
+            "N/A",
+            help="Ratio of male to female suicide mortality - values above 1 mean male rates are higher."
+        )
+
 
 st.markdown("---")
 
