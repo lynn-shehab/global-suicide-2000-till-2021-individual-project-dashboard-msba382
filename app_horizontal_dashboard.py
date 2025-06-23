@@ -101,7 +101,7 @@ main_line_color = get_dynamic_color(current_crude_mortality, min_mortality, max_
 
 # === TOP METRICS ===
 st.markdown("### \U0001F522 Key Indicators")
-col1, col2, col3, col4 = st.columns(4) # Added more columns for new metrics
+col1, col2, col3 = st.columns(3) # Added more columns for new metrics
 
 with col1:
     crude_mortality_delta = (latest['crude_mortality'].values[0] - previous['crude_mortality'].values[0]) if not previous.empty and not latest.empty and 'crude_mortality' in previous.columns and 'crude_mortality' in latest.columns else None
@@ -131,46 +131,6 @@ with col2:
         st.metric("Male-to-Female Ratio", "N/A", "N/A", help="Ratio of male to female suicide mortality - values above 1 mean male rates are higher.")
 
 with col3:
-    if "male_suicide_rate_age_standardized" in latest.columns:
-        current_male_rate = latest['male_suicide_rate_age_standardized'].values[0] if not latest.empty else None
-        previous_male_rate = previous['male_suicide_rate_age_standardized'].values[0] if not previous.empty else None
-
-        male_rate_delta = None
-        if current_male_rate is not None and previous_male_rate is not None:
-            male_rate_delta = current_male_rate - previous_male_rate
-
-        st.metric(
-            "Male Suicide Rate",
-            f"{current_male_rate:.2f} per 100k" if current_male_rate is not None else "N/A",
-            f"{male_rate_delta:+.2f}" if male_rate_delta is not None else "N/A",
-            help="Age-standardized suicide death rate among males per 100,000 population."
-        )
-    else:
-        st.metric("Male Suicide Rate", "N/A", "N/A", help="Age-standardized suicide death rate among males per 100,000 population.")
-
-with col4:
-    if "female_suicide_rate_age_standardized" in latest.columns:
-        current_female_rate = latest['female_suicide_rate_age_standardized'].values[0] if not latest.empty else None
-        previous_female_rate = previous['female_suicide_rate_age_standardized'].values[0] if not previous.empty else None
-
-        female_rate_delta = None
-        if current_female_rate is not None and previous_female_rate is not None:
-            female_rate_delta = current_female_rate - previous_female_rate
-
-        st.metric(
-            "Female Suicide Rate",
-            f"{current_female_rate:.2f} per 100k" if current_female_rate is not None else "N/A",
-            f"{female_rate_delta:+.2f}" if female_rate_delta is not None else "N/A",
-            help="Age-standardized suicide death rate among females per 100,000 population."
-        )
-    else:
-        st.metric("Female Suicide Rate", "N/A", "N/A", help="Age-standardized suicide death rate among females per 100,000 population.")
-
-# Additional metric: Estimated Total Suicides
-st.markdown("---")
-st.markdown("### \U0001F522 Additional Indicators")
-col_total_suicides = st.columns(1)[0]
-with col_total_suicides:
     current_total_suicides = None
     if not latest.empty and 'crude_mortality' in latest.columns and 'population' in latest.columns and pd.notna(latest['crude_mortality'].values[0]) and pd.notna(latest['population'].values[0]):
         current_total_suicides = int(latest['crude_mortality'].values[0] * latest['population'].values[0] / 100000)
@@ -197,21 +157,12 @@ st.markdown("### \U0001F4C8 Suicide Trends & Demographics")
 col1, col2, col3 = st.columns(3)
 
 with col1:
-    # Changed to px.scatter for trendline and then updated traces to make it a line
-    if not country_trend_df.empty:
-        fig = px.scatter(country_trend_df, x="year", y="crude_mortality",
-                         title=f"Crude Mortality Over Time — {selected_country} with Trend",
-                         trendline="ols", # This adds the linear regression trendline
-                         trendline_color_override="red" # Optional: color the trendline
-                        )
-        # Make the original data points connect with a line and maintain the main_line_color
-        fig.update_traces(mode='lines+markers', line=dict(color=main_line_color), selector=dict(type='scatter', mode='lines+markers'))
-        fig.update_layout(template="plotly_dark")
-        st.plotly_chart(fig, use_container_width=True)
-        st.caption("Crude mortality trend with a linear regression line, including all age groups and genders.")
-    else:
-        st.info(f"No crude mortality trend data available for {selected_country}.")
-
+    fig = px.line(country_trend_df, x="year", y="crude_mortality", markers=True,
+                  title=f"Crude Mortality Over Time — {selected_country}")
+    fig.update_traces(line=dict(color=main_line_color))
+    fig.update_layout(template="plotly_dark")
+    st.plotly_chart(fig, use_container_width=True)
+    st.caption("Crude mortality includes all age groups and genders.")
 
 with col2:
     age_cols = [c for c in df.columns if "aged_" in c and "both_sexes" in c]
@@ -313,20 +264,21 @@ with col5:
 
 
 with col6:
-    # This block now contains the 'Crude Mortality Over Time with Trend' graph
-    if not country_trend_df.empty:
-        fig = px.scatter(country_trend_df, x="year", y="crude_mortality",
-                         title=f"Crude Mortality Over Time — {selected_country} with Trend",
-                         trendline="ols", # This adds the linear regression trendline
-                         trendline_color_override="red" # Optional: make the trendline red
-                        )
-        # Make the original data points connect with a line and maintain the main_line_color
-        fig.update_traces(mode='lines+markers', line=dict(color=main_line_color), selector=dict(type='scatter', mode='lines+markers'))
+    if not top10.empty:
+        region_data = top10.groupby("country")["crude_mortality"].mean().reset_index()
+        if not region_data.empty and region_data["crude_mortality"].max() - region_data["crude_mortality"].min() != 0:
+            pie_colors = [get_dynamic_color(val, region_data["crude_mortality"].min(), region_data["crude_mortality"].max(), BLUE_COLOR_SCALE) for val in region_data["crude_mortality"]]
+        else:
+            pie_colors = [BLUE_COLOR_SCALE[len(BLUE_COLOR_SCALE)//2][1]] * len(region_data) if not region_data.empty else []
+
+
+        fig = px.pie(region_data, names="country", values="crude_mortality",
+                    title=f"Top 10 Country Share (by Crude Mortality) — {selected_year}")
+        fig.update_traces(textinfo="percent+label", marker=dict(colors=pie_colors))
         fig.update_layout(template="plotly_dark")
         st.plotly_chart(fig, use_container_width=True)
-        st.caption("Crude mortality trend with a linear regression line, including all age groups and genders.")
     else:
-        st.info(f"No crude mortality trend data available for {selected_country}.")
+        st.info(f"No data to show for Top 10 Country Share for {selected_year}.")
 
 
 # New section for Estimated Total Suicides (Absolute Numbers) and Regional Comparison
@@ -348,6 +300,7 @@ with col_abs_suicides:
 
         fig = px.bar(top10_abs, x="country", y="estimated_total_suicides",
                      title=f"Top 10 Countries (by Estimated Total Suicides) — {selected_year}",
+                     labels={"estimated_total_suicides": "Estimated Total Suicides"},
                      text_auto=".2s")
         fig.update_traces(marker_color=bar_colors_abs)
         fig.update_layout(showlegend=False, template="plotly_dark")
