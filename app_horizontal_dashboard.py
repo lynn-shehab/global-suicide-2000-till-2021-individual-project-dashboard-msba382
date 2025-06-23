@@ -3,37 +3,40 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 
-# Load data
-df = pd.read_csv("dashboard_data.csv")
-df = df.dropna(subset=["crude_mortality", "year", "country"])
+# Load data - It's good practice to cache this if the data is large and static
+@st.cache_data
+def load_data():
+    df = pd.read_csv("dashboard_data.csv")
+    df = df.dropna(subset=["crude_mortality", "year", "country"]) # Ensure primary cols are not NaN
+    # Clean up column names for easier access, especially for gender-specific rates
+    df.rename(columns={
+        "age_standardized_death_rate_from_self_inflicted_injuries_per_100,000_population___sex:_males___age_group:_all_ages": "male_suicide_rate_age_standardized",
+        "age_standardized_death_rate_from_self_inflicted_injuries_per_100,000_population___sex:_females___age_group:_all_ages": "female_suicide_rate_age_standardized"
+    }, inplace=True)
+    return df
+
+df = load_data()
 
 # --- COLOR DYNAMICS SETUP ---
-# Determine the range of your suicide rate for color mapping
 min_mortality = df['crude_mortality'].min()
 max_mortality = df['crude_mortality'].max()
 
-# Define a blue color scale (lighter for lower rates, darker for higher rates)
 BLUE_COLOR_SCALE = [
     [0.0, "#E0F2F7"],  # Very Light Blue
     [0.2, "#B3E0F2"],
     [0.4, "#80CCEB"],
     [0.6, "#4DB8E0"],
-    [0.8, "#1F77B4"],  # A standard blue (Plotly default)
-    [1.0, "#0A3B57"]   # Very Dark Blue
+    [0.8, "#1F77B4"],
+    [1.0, "#0A3B57"]
 ]
 
 def get_dynamic_color(value, min_val, max_val, color_scale):
-    """
-    Maps a value to a color within a defined color scale.
-    """
-    if pd.isna(value) or (max_val - min_val) == 0: # Handle division by zero if min_val == max_val
-        # Return a middle shade or default blue if no variation or data
+    if pd.isna(value) or (max_val - min_val) == 0:
         return color_scale[len(color_scale)//2][1] if color_scale else "#1F77B4"
 
     normalized_value = (value - min_val) / (max_val - min_val)
-    normalized_value = max(0.0, min(1.0, normalized_value)) # Ensure bounds
+    normalized_value = max(0.0, min(1.0, normalized_value))
 
-    # Find the two closest color points in the scale and interpolate
     for i in range(len(color_scale) - 1):
         if normalized_value >= color_scale[i][0] and normalized_value <= color_scale[i+1][0]:
             lower_bound_val, lower_bound_color = color_scale[i]
@@ -56,7 +59,7 @@ def get_dynamic_color(value, min_val, max_val, color_scale):
 
             interpolated_rgb = tuple(int(rgb1[j] + t * (rgb2[j] - rgb1[j])) for j in range(3))
             return rgb_to_hex(interpolated_rgb)
-    return color_scale[-1][1] # Return darkest blue if value is max or above
+    return color_scale[-1][1]
 
 # Page layout
 st.set_page_config(layout="wide")
@@ -66,24 +69,39 @@ st.markdown("---")
 
 # Sidebar Filters
 st.sidebar.header("\U0001F50D Filter")
-year = st.sidebar.slider("Year", int(df["year"].min()), int(df["year"].max()), 2019)
-country = st.sidebar.selectbox("Country", sorted(df["country"].dropna().unique()))
-country_df = df[df["country"] == country]
-filtered_df = df[df["year"] == year]
-latest = country_df[country_df["year"] == year]
-previous = country_df[country_df["year"] == year - 1]
 
-# Get the crude mortality for the selected country and year
-current_crude_mortality = latest['crude_mortality'].values[0] if not latest.empty else (min_mortality + max_mortality) / 2
+selected_year = st.sidebar.slider("Year", int(df["year"].min()), int(df["year"].max()), 2019)
+df_by_year = df[df["year"] == selected_year]
+
+available_countries = sorted(df_by_year["country"].dropna().unique())
+if not available_countries:
+    st.error(f"No data available for the year {selected_year}. Please choose a different year.")
+    st.stop()
+selected_country = st.sidebar.selectbox("Country", available_countries)
+
+# Filter data for selected country and year for current metrics/charts
+latest = df[(df["country"] == selected_country) & (df["year"] == selected_year)]
+previous = df[(df["country"] == selected_country) & (df["year"] == selected_year - 1)]
+
+# Data for country-specific time trends
+country_trend_df = df[df["country"] == selected_country].dropna(subset=["crude_mortality", "population"])
+
+# Data for year-specific, all-country charts
+filtered_data_for_year = df[df["year"] == selected_year]
+# Ensure population is not NaN for total suicides calculation
+filtered_data_for_year = filtered_data_for_year.dropna(subset=["population"])
+# Calculate estimated total suicides for the filtered_data_for_year
+if not filtered_data_for_year.empty:
+    filtered_data_for_year['estimated_total_suicides'] = (filtered_data_for_year['crude_mortality'] * filtered_data_for_year['population'] / 100000).astype(int)
+
 # Determine the main line color based on the current crude mortality
+current_crude_mortality = latest['crude_mortality'].values[0] if not latest.empty and 'crude_mortality' in latest.columns else (min_mortality + max_mortality) / 2
 main_line_color = get_dynamic_color(current_crude_mortality, min_mortality, max_mortality, BLUE_COLOR_SCALE)
 
-# Default title font color for dark theme (common for Streamlit dashboards unless explicitly changed)
-DEFAULT_TITLE_COLOR = "white" # Or "#FFFFFF" or "rgba(255, 255, 255, 0.8)" for a slightly softer white.
 
 # === TOP METRICS ===
 st.markdown("### \U0001F522 Key Indicators")
-col1, col2, col3 = st.columns(3) # Added more columns for new metrics
+col1, col2, col3, col4 = st.columns(4) # Added more columns for new metrics
 
 with col1:
     crude_mortality_delta = (latest['crude_mortality'].values[0] - previous['crude_mortality'].values[0]) if not previous.empty and not latest.empty and 'crude_mortality' in previous.columns and 'crude_mortality' in latest.columns else None
@@ -112,8 +130,47 @@ with col2:
     else:
         st.metric("Male-to-Female Ratio", "N/A", "N/A", help="Ratio of male to female suicide mortality - values above 1 mean male rates are higher.")
 
-
 with col3:
+    if "male_suicide_rate_age_standardized" in latest.columns:
+        current_male_rate = latest['male_suicide_rate_age_standardized'].values[0] if not latest.empty else None
+        previous_male_rate = previous['male_suicide_rate_age_standardized'].values[0] if not previous.empty else None
+
+        male_rate_delta = None
+        if current_male_rate is not None and previous_male_rate is not None:
+            male_rate_delta = current_male_rate - previous_male_rate
+
+        st.metric(
+            "Male Suicide Rate",
+            f"{current_male_rate:.2f} per 100k" if current_male_rate is not None else "N/A",
+            f"{male_rate_delta:+.2f}" if male_rate_delta is not None else "N/A",
+            help="Age-standardized suicide death rate among males per 100,000 population."
+        )
+    else:
+        st.metric("Male Suicide Rate", "N/A", "N/A", help="Age-standardized suicide death rate among males per 100,000 population.")
+
+with col4:
+    if "female_suicide_rate_age_standardized" in latest.columns:
+        current_female_rate = latest['female_suicide_rate_age_standardized'].values[0] if not latest.empty else None
+        previous_female_rate = previous['female_suicide_rate_age_standardized'].values[0] if not previous.empty else None
+
+        female_rate_delta = None
+        if current_female_rate is not None and previous_female_rate is not None:
+            female_rate_delta = current_female_rate - previous_female_rate
+
+        st.metric(
+            "Female Suicide Rate",
+            f"{current_female_rate:.2f} per 100k" if current_female_rate is not None else "N/A",
+            f"{female_rate_delta:+.2f}" if female_rate_delta is not None else "N/A",
+            help="Age-standardized suicide death rate among females per 100,000 population."
+        )
+    else:
+        st.metric("Female Suicide Rate", "N/A", "N/A", help="Age-standardized suicide death rate among females per 100,000 population.")
+
+# Additional metric: Estimated Total Suicides
+st.markdown("---")
+st.markdown("### \U0001F522 Additional Indicators")
+col_total_suicides = st.columns(1)[0]
+with col_total_suicides:
     current_total_suicides = None
     if not latest.empty and 'crude_mortality' in latest.columns and 'population' in latest.columns and pd.notna(latest['crude_mortality'].values[0]) and pd.notna(latest['population'].values[0]):
         current_total_suicides = int(latest['crude_mortality'].values[0] * latest['population'].values[0] / 100000)
@@ -134,18 +191,27 @@ with col3:
     )
 
 st.markdown("---")
+
 # === TRENDS & DEMOGRAPHICS ===
 st.markdown("### \U0001F4C8 Suicide Trends & Demographics")
 col1, col2, col3 = st.columns(3)
 
 with col1:
-    fig = px.line(country_df, x="year", y="crude_mortality", markers=True,
-                  title=f"Crude Mortality Over Time — {country}")
-    # Apply the main dynamic blue color to the line chart
-    fig.update_traces(line=dict(color=main_line_color))
-    fig.update_layout(template="plotly_white", title_font_color=DEFAULT_TITLE_COLOR) # Restore title color
-    st.plotly_chart(fig, use_container_width=True)
-    st.caption("Crude mortality includes all age groups and genders.")
+    # Changed to px.scatter for trendline and then updated traces to make it a line
+    if not country_trend_df.empty:
+        fig = px.scatter(country_trend_df, x="year", y="crude_mortality",
+                         title=f"Crude Mortality Over Time — {selected_country} with Trend",
+                         trendline="ols", # This adds the linear regression trendline
+                         trendline_color_override="red" # Optional: color the trendline
+                        )
+        # Make the original data points connect with a line and maintain the main_line_color
+        fig.update_traces(mode='lines+markers', line=dict(color=main_line_color), selector=dict(type='scatter', mode='lines+markers'))
+        fig.update_layout(template="plotly_dark")
+        st.plotly_chart(fig, use_container_width=True)
+        st.caption("Crude mortality trend with a linear regression line, including all age groups and genders.")
+    else:
+        st.info(f"No crude mortality trend data available for {selected_country}.")
+
 
 with col2:
     age_cols = [c for c in df.columns if "aged_" in c and "both_sexes" in c]
@@ -165,33 +231,52 @@ with col2:
         age_data.index = age_labels
         age_data.index.name = "Age Group"
 
-        # Dynamically color each bar based on its own 'rate' value
-        bar_colors_age = [get_dynamic_color(rate, age_data['rate'].min(), age_data['rate'].max(), BLUE_COLOR_SCALE) for rate in age_data['rate']]
+        if not age_data.empty and age_data['rate'].max() - age_data['rate'].min() != 0:
+            bar_colors_age = [get_dynamic_color(rate, age_data['rate'].min(), age_data['rate'].max(), BLUE_COLOR_SCALE) for rate in age_data['rate']]
+        else:
+            bar_colors_age = [BLUE_COLOR_SCALE[len(BLUE_COLOR_SCALE)//2][1]] * len(age_data) if not age_data.empty else []
+
 
         fig = px.bar(
             age_data,
             x=age_data.index,
             y="rate",
-            title=f"Suicide Rate by Age Group — {country} ({year})",
+            title=f"Suicide Rate by Age Group — {selected_country} ({selected_year})",
             labels={"rate": "Deaths per 100k", "index": "Age Group"},
             text_auto=".2f"
         )
-        fig.update_traces(marker_color=bar_colors_age) # Apply the dynamic colors
-        fig.update_layout(template="plotly_white", title_font_color=DEFAULT_TITLE_COLOR) # Restore title color
+        fig.update_traces(marker_color=bar_colors_age)
+        fig.update_layout(template="plotly_dark")
         st.plotly_chart(fig, use_container_width=True)
         st.caption("Note: Only includes both sexes.")
+    else:
+        st.info(f"No age-group data available for {selected_country} in {selected_year}.")
+
 
 with col3:
-    if "male_to_female_suicide_death_rate_ratio_age_standardized" in country_df.columns:
-        fig = px.line(
-            country_df.dropna(subset=["male_to_female_suicide_death_rate_ratio_age_standardized"]),
-            x="year", y="male_to_female_suicide_death_rate_ratio_age_standardized",
-            title=f"M:F Suicide Ratio — {country}", markers=True
-        )
-        # Apply a consistent, but perhaps slightly contrasting blue, or vary based on ratio itself
-        fig.update_traces(line=dict(color=main_line_color)) # Use the main line color for consistency
-        fig.update_layout(template="plotly_white", title_font_color=DEFAULT_TITLE_COLOR) # Restore title color
-        st.plotly_chart(fig, use_container_width=True)
+    if "male_suicide_rate_age_standardized" in country_trend_df.columns and "female_suicide_rate_age_standardized" in country_trend_df.columns and not country_trend_df.empty:
+        # Create a melted DataFrame for Plotly Express
+        gender_rates_df = country_trend_df[['year', 'male_suicide_rate_age_standardized', 'female_suicide_rate_age_standardized']].melt(
+            id_vars=['year'], var_name='Sex', value_name='Rate'
+        ).dropna(subset=['Rate'])
+
+        if not gender_rates_df.empty:
+            fig = px.line(
+                gender_rates_df,
+                x="year", y="Rate", color="Sex",
+                title=f"Male vs. Female Suicide Rates Over Time — {selected_country}", markers=True,
+                color_discrete_map={
+                    "male_suicide_rate_age_standardized": BLUE_COLOR_SCALE[-1][1], # Darker blue for male
+                    "female_suicide_rate_age_standardized": BLUE_COLOR_SCALE[1][1] # Lighter blue for female
+                }
+            )
+            fig.update_layout(template="plotly_dark")
+            st.plotly_chart(fig, use_container_width=True)
+            st.caption("Age-standardized death rates from self-inflicted injuries.")
+        else:
+            st.info(f"Not enough male/female suicide rate trend data for {selected_country}.")
+    else:
+        st.info(f"No male/female suicide rate trend data available for {selected_country}.")
 
 st.markdown("---")
 
@@ -200,37 +285,99 @@ st.markdown("### 🌍 Regional Analysis & Rankings")
 col4, col5, col6 = st.columns(3)
 
 with col4:
-    map_fig = px.choropleth(filtered_df,
+    map_fig = px.choropleth(filtered_data_for_year,
                             locations="country",
                             locationmode="country names",
                             color="crude_mortality",
-                            color_continuous_scale="Blues", # Keep this as a continuous blue scale for the map
-                            title=f"Suicide Rate Map — {year}")
-    map_fig.update_layout(template="plotly_white", title_font_color=DEFAULT_TITLE_COLOR) # Restore title color
+                            color_continuous_scale="Blues",
+                            title=f"Suicide Rate Map — {selected_year}")
+    map_fig.update_layout(template="plotly_dark")
     st.plotly_chart(map_fig, use_container_width=True)
 
 with col5:
-    top10 = filtered_df.sort_values("crude_mortality", ascending=False).head(10)
-    # Dynamically color each bar based on its own 'crude_mortality' value
-    bar_colors_top10 = [get_dynamic_color(val, top10['crude_mortality'].min(), top10['crude_mortality'].max(), BLUE_COLOR_SCALE) for val in top10["crude_mortality"]]
+    top10 = filtered_data_for_year.sort_values("crude_mortality", ascending=False).head(10)
+    if not top10.empty:
+        if top10['crude_mortality'].max() - top10['crude_mortality'].min() != 0:
+            bar_colors_top10 = [get_dynamic_color(val, top10['crude_mortality'].min(), top10['crude_mortality'].max(), BLUE_COLOR_SCALE) for val in top10["crude_mortality"]]
+        else:
+            bar_colors_top10 = [BLUE_COLOR_SCALE[len(BLUE_COLOR_SCALE)//2][1]] * len(top10)
 
-    fig = px.bar(top10, x="country", y="crude_mortality",
-                 title=f"Top 10 Countries — {year}", text_auto=".2s")
-    fig.update_traces(marker_color=bar_colors_top10) # Apply the dynamic colors
-    fig.update_layout(showlegend=False, template="plotly_white", title_font_color=DEFAULT_TITLE_COLOR) # Restore title color
-    st.plotly_chart(fig, use_container_width=True)
+
+        fig = px.bar(top10, x="country", y="crude_mortality",
+                    title=f"Top 10 Countries (by Crude Mortality) — {selected_year}", text_auto=".2s")
+        fig.update_traces(marker_color=bar_colors_top10)
+        fig.update_layout(showlegend=False, template="plotly_dark")
+        st.plotly_chart(fig, use_container_width=True)
+    else:
+        st.info(f"No top 10 country data available for {selected_year}.")
+
 
 with col6:
-    region_data = top10.groupby("country")["crude_mortality"].mean().reset_index()
-    pie_min_mortality = region_data["crude_mortality"].min()
-    pie_max_mortality = region_data["crude_mortality"].max()
-    pie_colors = [get_dynamic_color(val, pie_min_mortality, pie_max_mortality, BLUE_COLOR_SCALE) for val in region_data["crude_mortality"]]
+    # This block now contains the 'Crude Mortality Over Time with Trend' graph
+    if not country_trend_df.empty:
+        fig = px.scatter(country_trend_df, x="year", y="crude_mortality",
+                         title=f"Crude Mortality Over Time — {selected_country} with Trend",
+                         trendline="ols", # This adds the linear regression trendline
+                         trendline_color_override="red" # Optional: make the trendline red
+                        )
+        # Make the original data points connect with a line and maintain the main_line_color
+        fig.update_traces(mode='lines+markers', line=dict(color=main_line_color), selector=dict(type='scatter', mode='lines+markers'))
+        fig.update_layout(template="plotly_dark")
+        st.plotly_chart(fig, use_container_width=True)
+        st.caption("Crude mortality trend with a linear regression line, including all age groups and genders.")
+    else:
+        st.info(f"No crude mortality trend data available for {selected_country}.")
 
-    fig = px.pie(region_data, names="country", values="crude_mortality",
-                 title=f"Top 10 Country Share — {year}")
-    fig.update_traces(textinfo="percent+label", marker=dict(colors=pie_colors))
-    fig.update_layout(template="plotly_white", title_font_color=DEFAULT_TITLE_COLOR) # Restore title color
-    st.plotly_chart(fig, use_container_width=True)
+
+# New section for Estimated Total Suicides (Absolute Numbers) and Regional Comparison
+st.markdown("---")
+st.markdown("### \U0001F4C9 Absolute Numbers & Regional Context")
+col_abs_suicides, col_regional_avg = st.columns(2)
+
+with col_abs_suicides:
+    # Use filtered_data_for_year which already has 'estimated_total_suicides'
+    top10_abs = filtered_data_for_year.sort_values("estimated_total_suicides", ascending=False).head(10)
+    if not top10_abs.empty:
+        # Dynamically color based on estimated_total_suicides
+        abs_suicides_min = top10_abs['estimated_total_suicides'].min()
+        abs_suicides_max = top10_abs['estimated_total_suicides'].max()
+        if abs_suicides_max - abs_suicides_min != 0:
+            bar_colors_abs = [get_dynamic_color(val, abs_suicides_min, abs_suicides_max, BLUE_COLOR_SCALE) for val in top10_abs["estimated_total_suicides"]]
+        else:
+            bar_colors_abs = [BLUE_COLOR_SCALE[len(BLUE_COLOR_SCALE)//2][1]] * len(top10_abs)
+
+        fig = px.bar(top10_abs, x="country", y="estimated_total_suicides",
+                     title=f"Top 10 Countries (by Estimated Total Suicides) — {selected_year}",
+                     text_auto=".2s")
+        fig.update_traces(marker_color=bar_colors_abs)
+        fig.update_layout(showlegend=False, template="plotly_dark")
+        st.plotly_chart(fig, use_container_width=True)
+    else:
+        st.info(f"No data to show Top 10 Countries by Estimated Total Suicides for {selected_year}.")
+
+with col_regional_avg:
+    # Average crude mortality by OWID region for the selected year
+    regional_avg_df = filtered_data_for_year.groupby("world_regions_according_to_owid")["crude_mortality"].mean().reset_index()
+    regional_avg_df = regional_avg_df.sort_values("crude_mortality", ascending=False).dropna() # Sort and drop NaNs from region
+
+    if not regional_avg_df.empty:
+        # Dynamically color based on regional average crude mortality
+        regional_min_mortality = regional_avg_df['crude_mortality'].min()
+        regional_max_mortality = regional_avg_df['crude_mortality'].max()
+        if regional_max_mortality - regional_min_mortality != 0:
+            bar_colors_regional = [get_dynamic_color(val, regional_min_mortality, regional_max_mortality, BLUE_COLOR_SCALE) for val in regional_avg_df["crude_mortality"]]
+        else:
+            bar_colors_regional = [BLUE_COLOR_SCALE[len(BLUE_COLOR_SCALE)//2][1]] * len(regional_avg_df)
+
+        fig = px.bar(regional_avg_df, x="world_regions_according_to_owid", y="crude_mortality",
+                     title=f"Regional Average Suicide Rate — {selected_year}",
+                     labels={"world_regions_according_to_owid": "Region", "crude_mortality": "Avg. Deaths per 100k"},
+                     text_auto=".2f")
+        fig.update_traces(marker_color=bar_colors_regional)
+        fig.update_layout(showlegend=False, template="plotly_dark")
+        st.plotly_chart(fig, use_container_width=True)
+    else:
+        st.info(f"No regional average data available for {selected_year}.")
 
 st.markdown("---")
 st.download_button("⬇️ Download Filtered Data", filtered_df.to_csv(index=False), "filtered_data.csv")
