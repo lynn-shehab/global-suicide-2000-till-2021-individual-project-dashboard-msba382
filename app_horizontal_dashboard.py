@@ -3,7 +3,7 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 
-# Load data - It's good practice to cache this if the data is large and static
+# Load data 
 @st.cache_data
 def load_data():
     df = pd.read_csv("dashboard_data.csv")
