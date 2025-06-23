@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
-import plotly.graph_objects as go # Import plotly.graph_objects for custom color scales
+import plotly.graph_objects as go
 
 # Load data
 df = pd.read_csv("dashboard_data.csv")
@@ -9,14 +9,11 @@ df = df.dropna(subset=["crude_mortality", "year", "country"])
 
 # --- COLOR DYNAMICS SETUP ---
 # Determine the range of your suicide rate for color mapping
-# We'll use the global min/max for a consistent scale across all years/countries
 min_mortality = df['crude_mortality'].min()
 max_mortality = df['crude_mortality'].max()
 
 # Define a blue color scale (lighter for lower rates, darker for higher rates)
 # These are Hex codes for various shades of blue. You can adjust these.
-# '0.0': Lightest Blue (for min_mortality)
-# '1.0': Darkest Blue (for max_mortality)
 BLUE_COLOR_SCALE = [
     [0.0, "#E0F2F7"],  # Very Light Blue
     [0.2, "#B3E0F2"],
@@ -30,21 +27,19 @@ def get_dynamic_color(value, min_val, max_val, color_scale):
     """
     Maps a value to a color within a defined color scale.
     """
-    if pd.isna(value) or min_val == max_val:
-        return color_scale[0][1] # Return the lightest blue if no data or no variation
+    if pd.isna(value) or (max_val - min_val) == 0: # Handle division by zero if min_val == max_val
+        # Return a middle shade or default blue if no variation or data
+        return color_scale[len(color_scale)//2][1] if color_scale else "#1F77B4"
 
     normalized_value = (value - min_val) / (max_val - min_val)
-    # Ensure normalized_value is within [0, 1] bounds
-    normalized_value = max(0.0, min(1.0, normalized_value))
+    normalized_value = max(0.0, min(1.0, normalized_value)) # Ensure bounds
 
     # Find the two closest color points in the scale and interpolate
     for i in range(len(color_scale) - 1):
         if normalized_value >= color_scale[i][0] and normalized_value <= color_scale[i+1][0]:
-            # Linear interpolation
             lower_bound_val, lower_bound_color = color_scale[i]
             upper_bound_val, upper_bound_color = color_scale[i+1]
 
-            # Convert hex colors to RGB for interpolation
             def hex_to_rgb(hex_color):
                 hex_color = hex_color.lstrip('#')
                 return tuple(int(hex_color[i:i+2], 16) for i in (0, 2, 4))
@@ -55,8 +50,7 @@ def get_dynamic_color(value, min_val, max_val, color_scale):
             rgb1 = hex_to_rgb(lower_bound_color)
             rgb2 = hex_to_rgb(upper_bound_color)
 
-            # Calculate interpolation factor
-            if (upper_bound_val - lower_bound_val) == 0: # Avoid division by zero
+            if (upper_bound_val - lower_bound_val) == 0:
                 t = 0
             else:
                 t = (normalized_value - lower_bound_val) / (upper_bound_val - lower_bound_val)
@@ -81,9 +75,13 @@ latest = country_df[country_df["year"] == year]
 previous = country_df[country_df["year"] == year - 1]
 
 # Get the crude mortality for the selected country and year
-current_crude_mortality = latest['crude_mortality'].values[0] if not latest.empty else min_mortality
-# Determine the main color based on the current crude mortality
-main_blue_color = get_dynamic_color(current_crude_mortality, min_mortality, max_mortality, BLUE_COLOR_SCALE)
+current_crude_mortality = latest['crude_mortality'].values[0] if not latest.empty else (min_mortality + max_mortality) / 2
+# Determine the main line color based on the current crude mortality
+main_line_color = get_dynamic_color(current_crude_mortality, min_mortality, max_mortality, BLUE_COLOR_SCALE)
+
+# Default title font color for dark theme (common for Streamlit dashboards unless explicitly changed)
+# You might need to adjust this if your default theme is light or a different specific dark color.
+DEFAULT_TITLE_COLOR = "white" # Or "#FFFFFF" or "rgba(255, 255, 255, 0.8)" for a slightly softer white.
 
 # === TOP METRICS ===
 st.markdown("### \U0001F522 Key Indicators")
@@ -116,8 +114,8 @@ with col1:
     fig = px.line(country_df, x="year", y="crude_mortality", markers=True,
                   title=f"Crude Mortality Over Time — {country}")
     # Apply the main dynamic blue color to the line chart
-    fig.update_traces(line=dict(color=main_blue_color))
-    fig.update_layout(template="plotly_white", title_font_color=main_blue_color) # Also update title color
+    fig.update_traces(line=dict(color=main_line_color))
+    fig.update_layout(template="plotly_white", title_font_color=DEFAULT_TITLE_COLOR) # Restore title color
     st.plotly_chart(fig, use_container_width=True)
     st.caption("Crude mortality includes all age groups and genders.")
 
@@ -126,7 +124,11 @@ with col2:
     if age_cols and not latest.empty:
         age_data = latest[age_cols].T.dropna()
         age_data.columns = ["rate"]
+        # Ensure age_data is sorted by age group if you want the bars ordered
+        # You'll need to define a custom sort order for age labels if they're not numerical
+        # For now, let's keep the existing sort by rate for visual impact.
         age_data = age_data.sort_values("rate")
+
         age_labels = []
         for col in age_data.index:
             if "aged_" in col and "_year_olds" in col:
@@ -137,6 +139,10 @@ with col2:
                 age_labels.append(col)
         age_data.index = age_labels
         age_data.index.name = "Age Group"
+
+        # Dynamically color each bar based on its own 'rate' value
+        bar_colors_age = [get_dynamic_color(rate, age_data['rate'].min(), age_data['rate'].max(), BLUE_COLOR_SCALE) for rate in age_data['rate']]
+
         fig = px.bar(
             age_data,
             x=age_data.index,
@@ -145,9 +151,8 @@ with col2:
             labels={"rate": "Deaths per 100k", "index": "Age Group"},
             text_auto=".2f"
         )
-        # Apply the main dynamic blue color to the bar chart
-        fig.update_traces(marker_color=main_blue_color)
-        fig.update_layout(template="plotly_white", title_font_color=main_blue_color)
+        fig.update_traces(marker_color=bar_colors_age) # Apply the dynamic colors
+        fig.update_layout(template="plotly_white", title_font_color=DEFAULT_TITLE_COLOR) # Restore title color
         st.plotly_chart(fig, use_container_width=True)
         st.caption("Note: Only includes both sexes.")
 
@@ -159,9 +164,8 @@ with col3:
             title=f"M:F Suicide Ratio — {country}", markers=True
         )
         # Apply a consistent, but perhaps slightly contrasting blue, or vary based on ratio itself
-        # For simplicity, we'll use the main_blue_color for now, or a fixed blue if preferred.
-        fig.update_traces(line=dict(color=main_blue_color)) # Or a fixed color like "#007BFF"
-        fig.update_layout(template="plotly_white", title_font_color=main_blue_color)
+        fig.update_traces(line=dict(color=main_line_color)) # Use the main line color for consistency
+        fig.update_layout(template="plotly_white", title_font_color=DEFAULT_TITLE_COLOR) # Restore title color
         st.plotly_chart(fig, use_container_width=True)
 
 st.markdown("---")
@@ -171,41 +175,38 @@ st.markdown("### 🌍 Regional Analysis & Rankings")
 col4, col5, col6 = st.columns(3)
 
 with col4:
-    # For the choropleth map, we want the color *scale* to be blue, and directly reflect mortality
     map_fig = px.choropleth(filtered_df,
                             locations="country",
                             locationmode="country names",
                             color="crude_mortality",
-                            # Use a Plotly built-in bluescale for consistency on the map
-                            color_continuous_scale="Blues", # Changed from Tealgrn to Blues
+                            color_continuous_scale="Blues", # Keep this as a continuous blue scale for the map
                             title=f"Suicide Rate Map — {year}")
-    map_fig.update_layout(template="plotly_white", title_font_color=main_blue_color)
+    map_fig.update_layout(template="plotly_white", title_font_color=DEFAULT_TITLE_COLOR) # Restore title color
     st.plotly_chart(map_fig, use_container_width=True)
 
 with col5:
     top10 = filtered_df.sort_values("crude_mortality", ascending=False).head(10)
-    fig = px.bar(top10, x="country", y="crude_mortality", color="country",
+    # Dynamically color each bar based on its own 'crude_mortality' value
+    bar_colors_top10 = [get_dynamic_color(val, top10['crude_mortality'].min(), top10['crude_mortality'].max(), BLUE_COLOR_SCALE) for val in top10["crude_mortality"]]
+
+    fig = px.bar(top10, x="country", y="crude_mortality",
                  title=f"Top 10 Countries — {year}", text_auto=".2s")
-    # Instead of Set3, let's try a blue-toned discrete sequence
-    # Plotly has some qualitative blues: 'qualitative.Dark24', 'qualitative.Set1', 'qualitative.Pastel1' etc.
-    # Or, we can create a custom blue sequence based on the main_blue_color for the top bars.
-    # For simplicity, let's use a dynamic range of blues based on the current highest crude mortality values.
-    # Or, if you want *all* bars to be shades of blue, we can iterate and assign.
-    # Let's try to make them all shades of blue, relative to their own value.
-    bar_colors = [get_dynamic_color(val, min_mortality, max_mortality, BLUE_COLOR_SCALE) for val in top10["crude_mortality"]]
-    fig.update_traces(marker_color=bar_colors) # Apply the dynamic colors
-    fig.update_layout(showlegend=False, template="plotly_white", title_font_color=main_blue_color)
+    fig.update_traces(marker_color=bar_colors_top10) # Apply the dynamic colors
+    fig.update_layout(showlegend=False, template="plotly_white", title_font_color=DEFAULT_TITLE_COLOR) # Restore title color
     st.plotly_chart(fig, use_container_width=True)
 
 with col6:
     region_data = top10.groupby("country")["crude_mortality"].mean().reset_index()
+    # For the pie chart, we want slices to have different shades based on their value
+    # We should calculate the min/max from the 'crude_mortality' within this specific pie chart's data
+    pie_min_mortality = region_data["crude_mortality"].min()
+    pie_max_mortality = region_data["crude_mortality"].max()
+    pie_colors = [get_dynamic_color(val, pie_min_mortality, pie_max_mortality, BLUE_COLOR_SCALE) for val in region_data["crude_mortality"]]
+
     fig = px.pie(region_data, names="country", values="crude_mortality",
                  title=f"Top 10 Country Share — {year}")
-    # For the pie chart, we could also use shades of blue, or a diverging color scale if preferred.
-    # Let's try to generate shades of blue for the pie slices.
-    pie_colors = [get_dynamic_color(val, min_mortality, max_mortality, BLUE_COLOR_SCALE) for val in region_data["crude_mortality"]]
     fig.update_traces(textinfo="percent+label", marker=dict(colors=pie_colors))
-    fig.update_layout(template="plotly_white", title_font_color=main_blue_color)
+    fig.update_layout(template="plotly_white", title_font_color=DEFAULT_TITLE_COLOR) # Restore title color
     st.plotly_chart(fig, use_container_width=True)
 
 st.markdown("---")
