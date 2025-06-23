@@ -206,11 +206,13 @@ with col2:
 
 with col3:
     if "male_to_female_suicide_death_rate_ratio_age_standardized" in country_df.columns:
-        fig = px.line(country_df.dropna(subset=["male_to_female_suicide_death_rate_ratio_age_standardized"]),
-                      x="year", y="male_to_female_suicide_death_rate_ratio_age_standardized",
-                      title=f"M:F Suicide Ratio — {country}", markers=True,
-                      color_discrete_sequence=["#ff7f0e"])
-        fig.update_layout(template="plotly_white")
+        fig = px.line(
+            country_df.dropna(subset=["male_to_female_suicide_death_rate_ratio_age_standardized"]),
+            x="year", y="male_to_female_suicide_death_rate_ratio_age_standardized",
+            title=f"M:F Suicide Ratio — {country}", markers=True
+        )
+        fig.update_traces(line=dict(color=main_line_color))
+        fig.update_layout(template="plotly_dark") # Changed to plotly_dark
         st.plotly_chart(fig, use_container_width=True)
 
 
