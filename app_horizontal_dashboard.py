@@ -271,5 +271,5 @@ with col6:
         st.info(f"No data to show for Top 10 Country Share for {selected_year}.")
 
 st.markdown("---")
-st.download_button("⬇️ Download Filtered Data (Current Year)", filtered_data_for_year.to_csv(index=False), "filtered_data.csv")
+st.download_button(f"⬇️ Download Filtered Data ({selected_year})", filtered_data_for_year.to_csv(index=False), "filtered_data.csv")
 st.markdown("© 2025 Lynn Shehab | MSBA382 - Individual Project | AUB")
