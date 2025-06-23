@@ -92,7 +92,7 @@ main_line_color = get_dynamic_color(current_crude_mortality, min_mortality, max_
 
 # === TOP METRICS ===
 st.markdown("### \U0001F522 Key Indicators")
-col1, col3 = st.columns(2)
+col1, col3, col4 = st.columns(3)
 
 with col1:
     crude_mortality_delta = (latest['crude_mortality'].values[0] - previous['crude_mortality'].values[0]) if not previous.empty and not latest.empty else None
@@ -127,6 +127,25 @@ with col3:
             help="Ratio of male to female suicide mortality - values above 1 mean male rates are higher."
         )
 
+with col4 :
+    current_total_suicides = None
+    if not latest.empty and 'crude_mortality' in latest.columns and 'population' in latest.columns and pd.notna(latest['crude_mortality'].values[0]) and pd.notna(latest['population'].values[0]):
+        current_total_suicides = int(latest['crude_mortality'].values[0] * latest['population'].values[0] / 100000)
+
+    previous_total_suicides = None
+    if not previous.empty and 'crude_mortality' in previous.columns and 'population' in previous.columns and pd.notna(previous['crude_mortality'].values[0]) and pd.notna(previous['population'].values[0]):
+        previous_total_suicides = int(previous['crude_mortality'].values[0] * previous['population'].values[0] / 100000)
+
+    total_suicides_delta = None
+    if current_total_suicides is not None and previous_total_suicides is not None:
+        total_suicides_delta = current_total_suicides - previous_total_suicides
+
+    st.metric(
+        "Estimated Total Suicides",
+        f"{current_total_suicides:,}" if current_total_suicides is not None else "N/A",
+        f"{total_suicides_delta:+,}" if total_suicides_delta is not None else "N/A",
+        help="Estimated total number of suicide deaths (Crude Mortality * Population / 100,000)."
+    )
 
 st.markdown("---")
 
