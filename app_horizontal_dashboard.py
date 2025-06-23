@@ -84,20 +84,20 @@ main_line_color = get_dynamic_color(current_crude_mortality, min_mortality, max_
 DEFAULT_TITLE_COLOR = "white" # Or "#FFFFFF" or "rgba(255, 255, 255, 0.8)" for a slightly softer white.
 
 # === TOP METRICS ===
+# === TOP METRICS ===
 st.markdown("### \U0001F522 Key Indicators")
-col1, col3 = st.columns(2)
+col1, col2, col3, col4 = st.columns(4) # Added more columns for new metrics
 
 with col1:
-    delta = (latest['crude_mortality'].values[0] - previous['crude_mortality'].values[0]) if not previous.empty and not latest.empty else None
+    crude_mortality_delta = (latest['crude_mortality'].values[0] - previous['crude_mortality'].values[0]) if not previous.empty and not latest.empty and 'crude_mortality' in previous.columns and 'crude_mortality' in latest.columns else None
     st.metric(
         "Crude Mortality Rate",
-        f"{latest['crude_mortality'].values[0]:.2f} per 100k" if not latest.empty else "N/A",
-        f"{delta:+.2f}" if delta is not None else "N/A",
+        f"{latest['crude_mortality'].values[0]:.2f} per 100k" if not latest.empty and 'crude_mortality' in latest.columns else "N/A",
+        f"{crude_mortality_delta:+.2f}" if crude_mortality_delta is not None else "N/A",
         help="Total suicide deaths per 100,000 people — includes all age groups and genders."
     )
 
-with col3:
-    # Check if the column exists in the latest data
+with col2:
     if "male_to_female_suicide_death_rate_ratio_age_standardized" in latest.columns:
         current_m_f_ratio = latest['male_to_female_suicide_death_rate_ratio_age_standardized'].values[0] if not latest.empty else None
         previous_m_f_ratio = previous['male_to_female_suicide_death_rate_ratio_age_standardized'].values[0] if not previous.empty else None
@@ -113,16 +113,69 @@ with col3:
             help="Ratio of male to female suicide mortality - values above 1 mean male rates are higher."
         )
     else:
-        st.metric(
-            "Male-to-Female Ratio",
-            "N/A",
-            "N/A",
-            help="Ratio of male to female suicide mortality - values above 1 mean male rates are higher."
-        )
+        st.metric("Male-to-Female Ratio", "N/A", "N/A", help="Ratio of male to female suicide mortality - values above 1 mean male rates are higher.")
 
+with col3:
+    if "male_suicide_rate_age_standardized" in latest.columns:
+        current_male_rate = latest['male_suicide_rate_age_standardized'].values[0] if not latest.empty else None
+        previous_male_rate = previous['male_suicide_rate_age_standardized'].values[0] if not previous.empty else None
+
+        male_rate_delta = None
+        if current_male_rate is not None and previous_male_rate is not None:
+            male_rate_delta = current_male_rate - previous_male_rate
+
+        st.metric(
+            "Male Suicide Rate",
+            f"{current_male_rate:.2f} per 100k" if current_male_rate is not None else "N/A",
+            f"{male_rate_delta:+.2f}" if male_rate_delta is not None else "N/A",
+            help="Age-standardized suicide death rate among males per 100,000 population."
+        )
+    else:
+        st.metric("Male Suicide Rate", "N/A", "N/A", help="Age-standardized suicide death rate among males per 100,000 population.")
+
+with col4:
+    if "female_suicide_rate_age_standardized" in latest.columns:
+        current_female_rate = latest['female_suicide_rate_age_standardized'].values[0] if not latest.empty else None
+        previous_female_rate = previous['female_suicide_rate_age_standardized'].values[0] if not previous.empty else None
+
+        female_rate_delta = None
+        if current_female_rate is not None and previous_female_rate is not None:
+            female_rate_delta = current_female_rate - previous_female_rate
+
+        st.metric(
+            "Female Suicide Rate",
+            f"{current_female_rate:.2f} per 100k" if current_female_rate is not None else "N/A",
+            f"{female_rate_delta:+.2f}" if female_rate_delta is not None else "N/A",
+            help="Age-standardized suicide death rate among females per 100,000 population."
+        )
+    else:
+        st.metric("Female Suicide Rate", "N/A", "N/A", help="Age-standardized suicide death rate among females per 100,000 population.")
+
+# Additional metric: Estimated Total Suicides
+st.markdown("---")
+st.markdown("### \U0001F522 Additional Indicators")
+col_total_suicides = st.columns(1)[0]
+with col_total_suicides:
+    current_total_suicides = None
+    if not latest.empty and 'crude_mortality' in latest.columns and 'population' in latest.columns and pd.notna(latest['crude_mortality'].values[0]) and pd.notna(latest['population'].values[0]):
+        current_total_suicides = int(latest['crude_mortality'].values[0] * latest['population'].values[0] / 100000)
+
+    previous_total_suicides = None
+    if not previous.empty and 'crude_mortality' in previous.columns and 'population' in previous.columns and pd.notna(previous['crude_mortality'].values[0]) and pd.notna(previous['population'].values[0]):
+        previous_total_suicides = int(previous['crude_mortality'].values[0] * previous['population'].values[0] / 100000)
+
+    total_suicides_delta = None
+    if current_total_suicides is not None and previous_total_suicides is not None:
+        total_suicides_delta = current_total_suicides - previous_total_suicides
+
+    st.metric(
+        "Estimated Total Suicides",
+        f"{current_total_suicides:,}" if current_total_suicides is not None else "N/A",
+        f"{total_suicides_delta:+,}" if total_suicides_delta is not None else "N/A",
+        help="Estimated total number of suicide deaths (Crude Mortality * Population / 100,000)."
+    )
 
 st.markdown("---")
-
 # === TRENDS & DEMOGRAPHICS ===
 st.markdown("### \U0001F4C8 Suicide Trends & Demographics")
 col1, col2, col3 = st.columns(3)
