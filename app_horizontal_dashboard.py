@@ -23,7 +23,7 @@ previous = country_df[country_df["year"] == year - 1]
 
 # === TOP METRICS ===
 st.markdown("### \U0001F522 Key Indicators")
-col1, col2, col3 = st.columns(3)
+col1, col3 = st.columns(2)
 
 with col1:
     delta = (latest['crude_mortality'].values[0] - previous['crude_mortality'].values[0]) if not previous.empty else None
