@@ -6,12 +6,6 @@ import plotly.express as px
 df = pd.read_csv("dashboard_data.csv")
 df = df.dropna(subset=["crude_mortality", "year", "country"])
 
-if "incidence_per_100k" not in df.columns:
-    if "suicides_no" in df.columns and "population" in df.columns:
-        df["incidence_per_100k"] = (df["suicides_no"] / df["population"]) * 100000
-    else:
-        df["incidence_per_100k"] = None
-
 # Page layout
 st.set_page_config(layout="wide")
 st.title("\U0001F4CA Global Suicide Analytics Dashboard From 2000 till 2021")
@@ -38,14 +32,6 @@ with col1:
         f"{latest['crude_mortality'].values[0]:.2f} per 100k" if not latest.empty else "N/A",
         f"{delta:+.2f}" if delta else "N/A",
         help="Total suicide deaths per 100,000 people — includes all age groups and genders."
-    )
-
-with col2:
-    incidence_value = latest['incidence_per_100k'].values[0] if not latest.empty and not latest['incidence_per_100k'].isna().all() else None
-    st.metric(
-        "Incidence per 100k",
-        f"{incidence_value:.2f}" if incidence_value is not None else "N/A",
-        help="Estimated number of suicide cases per 100,000 individuals."
     )
 
 
