@@ -147,8 +147,6 @@ with col4 :
         help="Estimated total number of suicide deaths (Crude Mortality * Population / 100,000)."
     )
 
-st.markdown("---")
-
 # === TRENDS & DEMOGRAPHICS ===
 st.markdown("### \U0001F4C8 Suicide Trends & Demographics")
 col1, col2, col3 = st.columns(3)
@@ -216,8 +214,6 @@ with col3:
     else:
         st.info(f"No male-to-female ratio data available for {selected_country}.")
 
-st.markdown("---")
-
 # === REGIONAL ANALYSIS ===
 st.markdown("### 🌍 Regional Analysis & Rankings")
 col4, col5, col6 = st.columns(3)
@@ -270,6 +266,5 @@ with col6:
     else:
         st.info(f"No data to show for Top 10 Country Share for {selected_year}.")
 
-st.markdown("---")
 st.download_button(f"⬇️ Download Filtered Data ({selected_year})", filtered_data_for_year.to_csv(index=False), "filtered_data.csv")
 st.markdown("© 2025 Lynn Shehab | MSBA382 - Individual Project | AUB")
