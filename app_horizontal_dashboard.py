@@ -224,10 +224,6 @@ with col3:
             fig.update_layout(template="plotly_dark")
             st.plotly_chart(fig, use_container_width=True)
             st.caption("Age-standardized death rates from self-inflicted injuries.")
-        else:
-            st.info(f"Not enough male/female suicide rate trend data for {selected_country}.")
-    else:
-        st.info(f"No male/female suicide rate trend data available for {selected_country}.")
 
 st.markdown("---")
 
