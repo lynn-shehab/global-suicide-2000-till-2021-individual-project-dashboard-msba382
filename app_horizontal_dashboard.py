@@ -41,11 +41,13 @@ with col1:
     )
 
 with col2:
+    incidence_value = latest['incidence_per_100k'].values[0] if not latest.empty and not latest['incidence_per_100k'].isna().all() else None
     st.metric(
         "Incidence per 100k",
-        f"{latest['incidence_per_100k'].values[0]:.2f}" if not latest.empty else "N/A",
+        f"{incidence_value:.2f}" if incidence_value is not None else "N/A",
         help="Estimated number of suicide cases per 100,000 individuals."
     )
+
 
 with col3:
     if "male_to_female_suicide_death_rate_ratio_age_standardized" in latest.columns:
