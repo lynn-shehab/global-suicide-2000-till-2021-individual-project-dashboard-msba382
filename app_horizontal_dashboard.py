@@ -210,4 +210,4 @@ with col6:
 
 st.markdown("---")
 st.download_button("⬇️ Download Filtered Data", filtered_df.to_csv(index=False), "filtered_data.csv")
-st.markdown("© 2025 Lynn Shehab | MSBA Capstone Project | AUB")
+st.markdown("© 2025 Lynn Shehab | MSBA382 - Individual Project | AUB")
